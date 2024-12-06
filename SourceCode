@@ -1,0 +1,644 @@
+
+#Importing my modules
+import random
+import math
+from time import sleep
+from pynput.keyboard import Listener, Key
+
+#Define all of my variables to be able to add them to my dictionary later
+turnCounter = 1
+
+#Define the 2d Array and add all of the tiles.
+     
+#Define all of my classes
+class Player:
+    def __init__(self, number):
+        self.number = number
+        self.inventory = []
+        self.points = 0
+        self.currentSpace = None
+        self.name = None
+        self.gold = None
+        self.turnSkipped = 0
+    def useItem(self, player):
+        if len(self.inventory) == 0:
+            print("You have no items.")
+            return 0
+        print("Inventory: ")
+        x = 1
+        for i in self.inventory:
+            print(f"{x}. {i.name} ", end="")
+        
+        while True:
+            try:
+                ui = int(input("\nplease input the number for the item you would like to use: "))
+                if 0 <= ui <= len(self.inventory) :
+                    item = self.inventory[ui - 1]
+                    self.inventory.pop(ui - 1)
+                    item.useItem(player)
+                    break
+                else:
+                    print("Inventory error")
+            except ValueError:
+                print('Invalid Input')
+        
+
+class Board:
+    def __init__(self):
+        self.width = 6
+        self.height = 5
+        self.spaces = []
+        self.placeholder = Space(-99, -99, -99)
+    
+    
+        
+    def generateSpaces(self):
+        for y in range(self.height):
+            row = []
+            for x in range(self.width):
+            #create the dictionary for the space
+                boardSpace = Space((x + 1) + (y * self.width), y, x)
+                row.append(boardSpace)
+            self.spaces.append(row)
+            
+        for y in range(self.height):
+            for x in range(self.width):
+                connections = self.spaces[y][x].findConnectedSpaces(y, x, self.height, self.width)
+                for i in range(len(connections)):
+                    self.spaces[y][x].connectedSpaces.append(self.spaces[connections[i][0]][connections[i][1]])
+                
+                
+        
+class Space:
+    def __init__(self, number, spaceY, spaceX):
+        self.number = number
+        self.type = self.determine_type()
+        self.connectedSpaces = []
+        self.spaceY = spaceY
+        self.spaceX = spaceX
+        
+    def determine_type(self):
+        random_value = random.random()
+        if random_value <= 0.1:
+            return 'teleport'
+        elif random_value <= 0.2:
+            return 'chance'
+        elif random_value <= 0.4:
+            return 'good'
+        elif random_value <= 0.6:
+            return 'bad'
+        elif random_value <= 0.7:
+            return 'shop'
+        else:
+            return 'gold'
+    
+    def onLanding(self):
+        landingPlayer = game.players[turnCounter - 1]
+        if self.type == 'teleport':
+            self.teleportSpace(landingPlayer, game.board.height, game.board.width)
+        elif self.type == 'chance':
+            self.chance(landingPlayer)
+        elif self.type == 'good':
+            self.goodSpace(landingPlayer)
+        elif self.type == 'bad':
+            self.badSpace(landingPlayer)
+        elif self.type == 'shop':
+            self.shopSpace(landingPlayer)
+        elif self.type == 'gold':
+            print('You landed on a gold space, you gained 3 gold!')
+            landingPlayer.gold += 3
+        
+    def chance(self, movingPlayer):
+        print('You landed on a chance space, time to spin the chance wheel!')
+        sleep(1)
+        print("Spinning Now...")
+        sleep(1)
+        wheel = random.randint(1, 8)
+        if wheel == 1:
+            print("Communism, evenly split the points and gold.")
+            commyGold = 0
+            commyPoints = 0
+            for player in self.players:
+                commyGold = commyGold + player.gold
+                commyPoints = commyPoints + player.points
+            for player in self.players:
+                player.gold = commyGold // len(self.players)
+                player.points = commyPoints // len(self.players)
+        elif wheel == 2:
+            print("Randomly get teleported somewhere")
+            self.teleportSpace(movingPlayer, self.board.height, self.board.width)
+        elif wheel == 3:
+            print("Double your points")
+            movingPlayer.points *= 2
+        elif wheel == 4:
+            print("Steal everyone else's gold.")
+            for player in self.players:
+                if player != movingPlayer:    
+                    movingPlayer.gold = player.gold + movingPlayer.gold
+                    player.gold = 0
+        elif wheel == 5:
+            print("Lose all your points.")
+            movingPlayer.points = 0
+        elif wheel == 6:
+            print("Lose all your gold")
+            movingPlayer.gold = 0
+        elif wheel == 7:
+            print("Get Sent to the shadow realm")
+            movingPlayer.currentSpace = "SR"
+        elif wheel == 8:
+            print("Chance Time!")
+            self.chanceTime(game.players)
+                      
+    def chanceTime(self, players):
+        chanceEffects = ["Points -->", "Points <--", "Points <->", "Gold <--", "Gold -->", "Gold <->", "Gold and Points <->"]
+        print("Press the enter key whenever to make your choice.")
+        sleep(1)
+        print('Picking the first player for chance time.')
+        player1 = players[random.randint(0, len(players) - 1)]
+        print("Player 1 is: ", player1.name)
+        sleep(1)
+        print("Picking player 2 for chance time.")
+        player2 = players[random.randint(0, len(players) - 1)]
+        print("Player 2 is: ", player2.name)
+        sleep(1)
+        print("Picking the Effect")
+        sleep(5)
+        effect = chanceEffects[random.randint(0, len(chanceEffects) - 1)]
+        print(player1.name, effect, player2.name)
+        if effect == chanceEffects[0]:
+            player2.points = player2.points + player1.points
+            player1.points = 0
+        elif effect == chanceEffects[1]:
+            player1.points = player2.points + player1.points
+            player2.points = 0
+        elif effect == chanceEffects[2]:
+            buffer = player1.points
+            player1.points = player2.points
+            player2.points = buffer
+        elif effect == chanceEffects[3]:
+            player1.gold = player1.gold + player2.gold
+            player2.gold = 0
+        elif effect == chanceEffects[4]:
+            player2.gold = player1.gold + player2.gold
+            player1.gold = 0
+        elif effect == chanceEffects[5]:
+            buffer = player1.gold
+            player1.gold = player2.gold
+            player2.gold = buffer
+        elif effect == chanceEffects[6]:
+            buffer1 = player1.points
+            buffer2 = player1.gold
+            player1.points = player2.points
+            player1.gold = player2.gold
+            player2.points = buffer1
+            player2.gold = buffer2
+              
+    def badSpace(self, movingPlayer):
+        print('You landed on a bad space, time to spin the bad wheel!')
+        sleep(1)
+        print("Spinning Now...")
+        sleep(1)
+        badWheel = random.randint(1, 8)
+        badWheel = 6
+        if badWheel == 1:
+            print("Lose 3 Points")
+            movingPlayer.points -= 3
+        elif badWheel == 2:
+            print("Lose 5 Gold")
+            movingPlayer.gold -= 5
+        elif badWheel == 3:
+            print("Lose 3 Gold")
+            movingPlayer.gold -= 3
+        elif badWheel == 4:
+            print("Spin 2 More Times")
+            self.badSpace(movingPlayer)
+            self.badSpace(movingPlayer)
+        elif badWheel == 5:
+            print("Get Randomly Teleported Somewhere")
+            self.teleportSpace(movingPlayer, game.board.height, game.board.width)
+        elif badWheel == 6:
+            print("Give 10 Gold to Another Player")
+            sleep(0.5)
+            if len(game.players) == 1:
+                print('There are no other players so you just lose 10 Gold instead')
+                movingPlayer.gold -= 10
+                return 0
+            x = 1
+            for i in game.players:
+                print(x, ".", i.name)
+                x += 1
+
+            while True:
+                try:
+                    # Get user input and convert it to a 0-based index
+                    choice_index = int(input("Enter the number for the player you would like to give the gold to: ")) - 1
+        
+                    # Validate the index is within range
+                    if 0 <= choice_index < len(game.players):
+                        choice = game.players[choice_index]
+            
+                        # Ensure the selected player is not the current player
+                        if choice != movingPlayer:
+                            break
+                        else:
+                            print("You can't pick yourself!")
+                    else:
+                        print("Invalid choice. Select a valid player.")
+                except ValueError:
+                    print("Input not recognized. Please enter a number.")
+
+            # Transfer gold between players
+            choice.gold += 10
+            movingPlayer.gold -= 10
+            print(movingPlayer.name, "gave", choice.name, "10 gold.")
+
+        elif badWheel == 7:
+            print("Lose your next Turn")
+            movingPlayer.turnSkipped += 1
+        elif badWheel == 8:
+            print("Spin the Good Wheel")
+            self.goodSpace(movingPlayer)
+            
+    def goodSpace(self, movingPlayer):
+        print('You landed on a good space, time to spin the good wheel!')
+        sleep(1)
+        print("Spinning Now...")
+        sleep(2)
+        wheel = random.randint(1, 6)
+        if wheel == 1:
+            print("Double Gold")
+            movingPlayer.gold *= 2
+        elif wheel == 2:
+            print("Gain 3 points")
+            movingPlayer.points += 3
+        elif wheel == 3:
+            print("Gain five points")
+            movingPlayer.points += 5
+        elif wheel == 4:
+            print("Get any item for free*")
+        elif wheel == 5:
+            print("Spin the bad Wheel")
+            self.badSpace(movingPlayer)
+        elif wheel == 6:
+            print("Steal 5 Gold from a player.")
+            sleep(0.5)
+            if len(game.players) == 1:
+                print("Since there are no other players you just gain 5 gold instead.")
+                movingPlayer.gold += 5
+                return 0
+            x = 1
+            for i in game.players:
+                print(x, ".", i.name)
+                x += 1
+
+            while True:
+                try:
+                    # Get user input and convert it to a 0-based index
+                    choice_index = int(input("Enter the number for the player you would like to steal the gold from: ")) - 1
+        
+                    # Validate the index is within range
+                    if 0 <= choice_index < len(game.players):
+                        choice = game.players[choice_index]
+            
+                        # Ensure the selected player is not the current player
+                        if choice != movingPlayer:
+                            break
+                        else:
+                            print("You can't pick yourself!")
+                    else:
+                        print("Invalid choice. Select a valid player.")
+                except ValueError:
+                    print("Input not recognized. Please enter a number.")
+
+            # Transfer gold between players
+            choice.gold -= 5
+            movingPlayer.gold += 10
+            print(movingPlayer.name, "stole 5 gold from", choice.name)
+        elif wheel == 7:
+            print("Banished to the Shadow Realm!")
+            sleep(1)
+            game.shadowRealm(movingPlayer)
+            movingPlayer.currentSpace = "SR"
+
+    def shopSpace(self, movingPlayer):
+        while True:
+            ui = input('You landed on a shop space, would you like to go in? \n 1. Yes    2. No\n: ')
+            if ui == '1':
+               x = 1
+               y = 1
+               for i in game.itemNames:
+                   if y > 4:
+                       print()
+                       y = 1
+                   price = game.itemDatabase[i]
+                   print(f"{x}. {i}: {price} gold;    ", end="")
+                   x += 1
+                   y += 1
+               while True:
+                   print(f"You have {movingPlayer.gold} gold.")
+                   ui = int(input("Input the number for the item you would like to buy or enter 0 if you would like to exit.\n: "))
+                   if ui == 0:
+                       print("Come Again soon!")
+                       break
+                   elif ui in range(len(game.itemNames) - 1):
+                       itemGold = game.itemDatabase[game.itemNames[ui - 1]]
+                       if movingPlayer.gold >= itemGold:
+                           print("Buying Item..")
+                           sleep(1)
+                           movingPlayer.gold -= itemGold
+                           movingPlayer.inventory.append(Item(game.itemNames[ui - 1]))
+                           print("Item Bought!")
+                           break
+                       else:
+                           print("You don't have enough gold!")
+               break
+            elif ui == 2:
+                print("Okay, come again next time!")
+                break
+            else:
+                print('Invalid or unrecognized input.')
+        
+    def teleportSpace(self, movingPlayer, height, width):
+        print('You Landed on a Teleport Space, Teleporting You Now..')
+        sleep(2)
+        movingPlayer.currentSpace = game.board.spaces[random.randint(0, height - 1)][random.randint(0, width - 1)]
+        movingPlayer.currentSpace.onLanding()
+        print("You have been teleported.")
+        
+    def findConnectedSpaces(self, spaceY, spaceX, boardHeight, boardWidth):
+    
+        #define a list for the connected spaces
+        connectedSpaces = []
+        #define all of the coordinates as a variable so we can check them later
+        xRight = spaceX + 1
+        xLeft = spaceX - 1
+        yUp = spaceY - 1
+        yDown = spaceY + 1
+    
+        maxX = boardWidth
+        maxY = boardHeight
+
+        # Try to connect to spaces in all directions
+        if xRight < maxX:  # Right
+            connectedSpaces.append((spaceY, xRight))
+        if xLeft >= 0:  # Left
+            connectedSpaces.append((spaceY, xLeft))
+        if yDown < maxY:  # Down
+            connectedSpaces.append((yDown, spaceX))
+        if yUp >= 0:  # Up
+            connectedSpaces.append((yUp, spaceX))
+        if yUp >= 0 and xLeft >= 0:
+            connectedSpaces.append((yUp, xLeft))
+        if yUp >= 0 and xRight < maxX:
+            connectedSpaces.append((yUp, xRight))
+        if yDown < maxY and xLeft >= 0:
+            connectedSpaces.append((yDown, xLeft))
+        if yDown < maxY and xRight < maxX:
+            connectedSpaces.append((yDown, xRight))
+        return connectedSpaces
+        
+class Controller:
+    def __init__(self):
+        self.board = Board()
+        self.turnCounter = 1
+        self.playerCount = None
+        self.players = []
+        self.winPoints = None
+        self.itemPlaceholder = Item("Placeholder")
+        self.itemDatabase = {'Teleporter' : 4, 'Thief' : 10, 'Point Medal' : 7, 'Slot Machine' : 5, 'Energy Drink' : 7, 'Handcuffs' : 7, 'Gold Bag' : 4}
+        self.itemNames = list(self.itemDatabase.keys())
+        
+    def gameStart(self):
+        print("Welcome to the board game! Version 1.0 Please Enjoy!")
+        self.board.generateSpaces()
+        self.generatePlayers()
+        print("How many points would you like to play to? ")
+        while True:
+            try:
+                self.winPoints = int(input())
+                break
+            except ValueError:
+                print("That input didn't work, please try again.")
+        
+    
+    def movePlayer(self, movingPlayer):
+        movementSpaces = []
+        possibleMoves = []
+        print(f"{self.players[movingPlayer].name} is moving,", end='')
+        playerSpace = self.players[movingPlayer].currentSpace
+        #Turn all of the numbers into directions
+        for i in range(len(self.players[movingPlayer].currentSpace.connectedSpaces)):
+            spaceCheck = (self.players[movingPlayer].currentSpace.connectedSpaces[i - 1])
+            if (spaceCheck.number == playerSpace.number - 1):
+                possibleMoves.append("Left")
+                movementSpaces.append(spaceCheck)
+            elif(spaceCheck.number == playerSpace.number + 1):
+                possibleMoves.append("Right")
+                movementSpaces.append(spaceCheck)
+            elif (spaceCheck.number == playerSpace.number - self.board.width):
+                possibleMoves.append("Up")
+                movementSpaces.append(spaceCheck)
+            elif(spaceCheck.number == playerSpace.number + self.board.width):
+                possibleMoves.append("Down")
+                movementSpaces.append(spaceCheck)
+            elif(spaceCheck.number == (playerSpace.number - self.board.width) + 1):
+                possibleMoves.append("Up Right")
+                movementSpaces.append(spaceCheck)
+            elif(spaceCheck.number == (playerSpace.number - self.board.width) - 1):
+                possibleMoves.append("Up Left")
+                movementSpaces.append(spaceCheck)
+            elif(spaceCheck.number == (playerSpace.number + self.board.width) - 1):
+                possibleMoves.append("Down Left")
+                movementSpaces.append(spaceCheck)
+            elif(spaceCheck.number == (playerSpace.number + self.board.width) + 1):
+                possibleMoves.append("Down Right")
+                movementSpaces.append(spaceCheck)
+            else:
+                print("Movement Error")
+        while True:
+            print("You can move: ", possibleMoves, "\nWhere would you like to move?  ")
+            playerMove = input()
+            if playerMove in possibleMoves:
+                print("Moving...")
+                self.players[movingPlayer].currentSpace = movementSpaces[possibleMoves.index(playerMove)]
+                self.players[movingPlayer].currentSpace.onLanding()
+                break
+            else:
+                print("You can't move there!")
+        
+    def playerTurn(self, player):
+        if player.turnSkipped <= 0:
+            if player.currentSpace != 'SR':
+                print(f"It is {player.name}'s turn.\nWhat would you like to do?\n1.Move\n2.Check Inventory/Use Item\n3.Check Scoreboard")
+                while True:
+                    ui = input()
+                    if ui == '1':
+                        self.movePlayer(turnCounter - 1)
+                        break
+                    elif ui == '2':
+                        player.useItem(player)
+                    elif ui == '3':
+                        for i in self.players:
+                            print(f"Player {i.name} points: {i.points} Gold: {i.gold}")
+                    elif ui == '4':
+                        player.points += 10
+                    else:
+                        print("Invalid Input.")
+            else:
+                self.shadowRealm(player)
+        else:
+            print("Your turn is skipped, sucks to be you.")
+            player.turnSkipped -= 1
+        
+    def checkWin(self):
+        for player in self.players:
+            if player.points >= self.winPoints:
+               print(player.name, "has won the game, good job to them.")
+               return False
+            return True
+        
+    def generatePlayers(self):
+        while True:
+            self.playerCount = input("Please Enter the number of players: ")
+            try:
+                self.playerCount = int(self.playerCount)
+            except ValueError:
+                self.playerCount = None
+            if type(self.playerCount) == int:
+                break
+        for i in range(self.playerCount):
+            player = Player(i + 1)
+            player.name = input(f'Please enter the name for player {player.number}: ')
+            player.gold = 5
+            self.players.append(player)
+            player.currentSpace = self.board.spaces[random.randint(0, self.board.height - 1)][random.randint(1, self.board.width - 1)]
+    
+    def shadowRealm(self, player):
+        print("You're stuck in the shadow realm, you must spin the shadow wheel or use an item to escape.\n1. Spin the Wheel   2. Use an Item")
+        choice = input()
+        if choice == '1':
+            print("Spinning the Wheel")
+            wheel = random.randint(0,5)
+            if wheel == 1:
+                print("Lose 3 points.")
+                player.points -= 3
+            elif wheel == 2:
+                print("Lose 5 gold.")
+                player.gold -= 5
+            elif wheel == 3:
+                print("Get Randomly teleported.")
+                self.board.placeholder.teleportSpace(player, self.board.height, self.board.width)
+            elif wheel == 4:
+                print("Gain a random item.")
+                item = random.randint(0, len(self.itemPlaceholder.itemDatabase) - 1)
+                item = Item(item)
+                player.inventory.append(item)
+            elif wheel == 5:
+                print("Gain 1 point.")
+                player.points += 1
+            elif wheel == 6:
+                self.board.placeholder.chance(player)
+        elif choice == '2':
+            print("Using item.")
+            player.useItem()
+
+class Item:
+    def __init__(self, name):
+        self.name = name
+        
+    def useItem(self, player):
+        if self.name == "Teleporter":
+            self.teleporter(player)
+        elif self.name == "Thief":
+            print("Who would you like to steal from?")
+            target = self.findTarget(player)
+            
+            self.pointSteal(player, target)
+        elif self.name == "Point Medal":
+            self.pointGain(player)
+        elif self.name == "Slot Machine":
+            self.gamble(player)
+        elif self.name == "Energy Drink":
+            self.extraMove(player)
+        elif self.name == "Handcuffs":
+            print("Who would you like to lose their turn?")
+            target = self.findTarget(player)
+            self.loseTurn(target)
+        elif self.name == "Gold Bag":
+            self.goldGain(player)
+        else:
+            print("Item Error")
+            
+    def findTarget(self, player):
+        for i in game.players:
+                print(f"{i.number}. {i.name}  ", end="")
+        while True:
+            try:
+                target = int(input())
+                if target in range(len(game.players)):
+                    target = game.players[target - 1]
+                    if target != player:
+                        return target
+                    else:
+                        print("You can't pick yourself!")
+                else:
+                    print("Selection Not Valid")
+            except ValueError:
+                print("Invalid input")
+    def pointGain(self, player):
+        points = random.randint(1,6)
+        player.points += points
+        print(f"{player.name}has gained {points} points.")
+        
+    def pointSteal(self, player, target):
+        gamble = random.randint(0,6)
+        player.points += gamble
+        target.points -= gamble
+        print(f"{player.name} has stolen {gamble} points from {target.name}.")
+    
+    def extraMove(self, player):
+        game.movePlayer(player)
+    
+    def loseTurn(self, target):
+        target.turnSkipped += 1
+        
+    def teleporter(self, player):
+        teleport = Space(-1, -9, -9)
+        teleport.teleportSpace(player, game.board.height, game.board.width)
+        
+    def goldGain(self, player):
+        player.gold += random.randint(1,10)
+        
+    def gamble(self, player):
+        while True:
+            try:
+                wager = int(input(f"Please enter how many points wou would like to wager, you have: {player.points}."))
+                break
+            except ValueError:
+                print("Input not recognized.")
+                
+        gamble = random.randint(1,3)
+        while True:
+            try:
+                choice = int(input("Enter 1, 2, or 3 to gamble. If you guess the right number you wil double your bet, if you get it wrong you lose it all."))
+                break
+            except ValueError:
+                print("Input Not Recognized.")
+        if choice == gamble:
+            player.points += 1
+        else:
+            wager *= -1
+        
+    
+        
+
+gameBeingPlayed = True
+game = Controller()
+game.gameStart()
+while game.checkWin() == True:
+    if turnCounter > game.playerCount:
+        turnCounter = 1
+    game.playerTurn(game.players[turnCounter - 1])
+    turnCounter += 1
+    
+print("Thanks for playing the game.")
